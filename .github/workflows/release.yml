@@ -115,11 +115,21 @@ jobs:
 
       - name: Smoke test image with Podman
         run: |
+          set -euo pipefail
           mkdir -p /tmp/smoke-out
-          chmod 0777 /tmp/smoke-out
-          podman run --rm -v /tmp/smoke-out:/out:Z "${{ steps.build.outputs.primary_tag }}" \
+          podman run --rm \
+            --userns=keep-id --user "$(id -u):$(id -g)" \
+            -v /tmp/smoke-out:/out:Z "${{ steps.build.outputs.primary_tag }}" \
             --text "CI\nSmoke" --out /out/logo.png
           test -s /tmp/smoke-out/logo.png
+
+          # Verify mountless raw PNG (--out -) and base64 (--stdout) output
+          podman run --rm --read-only "${{ steps.build.outputs.primary_tag }}" \
+            --text "CI\nStdout" --out - > /tmp/smoke-out/stdout.png
+          test -s /tmp/smoke-out/stdout.png
+
+          podman run --rm --read-only "${{ steps.build.outputs.primary_tag }}" \
+            --text "CI\nBase64" --stdout | grep -q '^data:image/png;base64,'
 
       - name: Push tags to GHCR with Buildah
         id: push
@@ -162,7 +172,13 @@ jobs:
 
           #### Usage
           \`\`\`bash
-          podman run --rm -v "\$PWD/out:/out" ${IMAGE_LOWER}:${IMAGE_TAG} --text "Acme\nCloud" --out /out/logo.png
+          mkdir -p "\$PWD/out" && podman run --rm \\
+            --userns=keep-id --user "\$(id -u):\$(id -g)" \\
+            -v "\$PWD/out:/out:Z" ${IMAGE_LOWER}:${IMAGE_TAG} \\
+            --text "Acme\nCloud" --out /out/logo.png
+
+          # Or stream PNG directly without volume mounts:
+          podman run --rm ${IMAGE_LOWER}:${IMAGE_TAG} --text "Acme\nCloud" --out - > logo.png
           \`\`\`
           EOF
           )

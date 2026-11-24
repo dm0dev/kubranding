@@ -21,10 +21,11 @@ import {
 const HELP = `Usage: node src/cli/generate.ts [options]
 
 Output
-  -o, --out <file>          PNG output path                     (default: logo.png)
+  -o, --out <file>          PNG output path ("-" writes raw PNG to stdout;
+                            default: logo.png unless --stdout is set)
       --base64-out <file>   Also write the base64 string to a file
       --no-prefix           Omit "data:image/png;base64," in --base64-out / --stdout
-      --stdout              Print the base64 string to stdout instead of logging a summary
+      --stdout              Print the base64 string to stdout (skips writing logo.png unless --out is set)
       --json-layout <file>  Write the computed layout (geometry) as JSON
 
 Input
@@ -60,7 +61,7 @@ const NUMERIC_FLAGS = {
 async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {
-      out: { type: 'string', short: 'o', default: 'logo.png' },
+      out: { type: 'string', short: 'o' },
       'base64-out': { type: 'string' },
       'no-prefix': { type: 'boolean', default: false },
       stdout: { type: 'boolean', default: false },
@@ -87,6 +88,10 @@ async function main(): Promise<void> {
   if (values.help) {
     process.stdout.write(HELP)
     return
+  }
+
+  if (values.out === '-' && values.stdout) {
+    throw new Error('Cannot combine --out - with --stdout (both write to stdout)')
   }
 
   // Config file first, flags override
@@ -123,9 +128,15 @@ async function main(): Promise<void> {
 
   const logo = await generateLogo({ config, icon })
 
-  const out = values.out as string
-  await mkdir(dirname(out) || '.', { recursive: true })
-  await writeFile(out, logo.png)
+  const out = values.out ?? (values.stdout ? undefined : 'logo.png')
+  const writePngToStdout = out === '-'
+
+  if (writePngToStdout) {
+    process.stdout.write(logo.png)
+  } else if (out) {
+    await mkdir(dirname(out) || '.', { recursive: true })
+    await writeFile(out, logo.png)
+  }
 
   const base64Text = values['no-prefix'] ? logo.base64 : logo.dataUri
   if (values['base64-out']) {
@@ -139,7 +150,7 @@ async function main(): Promise<void> {
 
   if (values.stdout) {
     process.stdout.write(base64Text + '\n')
-  } else {
+  } else if (out && !writePngToStdout) {
     const { canvasWidth, canvasHeight } = logo.layout
     console.log(`Wrote ${out} (${canvasWidth}×${canvasHeight}px, ${logo.byteLength} bytes)`)
   }

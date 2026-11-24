@@ -1,7 +1,11 @@
 # Headless logo generator for CI/CD (Node, no browser needed).
 #
-#   podman build -f Containerfile -t logo-gen .
-#   podman run --rm -v "$PWD/out:/out" logo-gen --text "Acme\nCloud" --color EE0000 --out /out/logo.png
+#   podman build -f Containerfile -t kubranding .
+#   mkdir -p "$PWD/out" && podman run --rm \
+#     --userns=keep-id --user "$(id -u):$(id -g)" \
+#     -v "$PWD/out:/out:Z" kubranding --text "Acme\nCloud" --color EE0000 --out /out/logo.png
+#   # Or pipe the PNG directly without bind mounts:
+#   podman run --rm kubranding --text "Acme\nCloud" --color EE0000 --out - > logo.png
 FROM quay.io/hummingbird/nodejs:24-builder AS builder
 
 WORKDIR /app

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCb } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -263,6 +264,30 @@ describe('CLI (src/cli/generate.ts)', { concurrency: true }, () => {
     assert.equal(resRaw.stdout.trim(), rawFileContent)
     assert.ok(!rawFileContent.startsWith('data:'))
     assert.deepEqual(Buffer.from(rawFileContent, 'base64'), rawPngBytes)
+
+    // --stdout without --out skips writing default logo.png
+    const stdoutOnlyDir = await makeCaseDir('stdout-only')
+    const resStdoutOnly = await runCli(['--text', 'Stdout Only', '--stdout'], stdoutOnlyDir)
+    assert.equal(resStdoutOnly.exitCode, 0, resStdoutOnly.stderr)
+    assert.ok(resStdoutOnly.stdout.trim().startsWith('data:image/png;base64,'))
+    assert.equal(existsSync(join(stdoutOnlyDir, 'logo.png')), false)
+  })
+
+  it('writes raw PNG bytes to stdout when --out - is passed', async () => {
+    const dir = await makeCaseDir('png-stdout')
+    const { stdout, stderr } = await execFile(process.execPath, [CLI_PATH, '--text', 'Pipe', '--out', '-'], {
+      cwd: dir,
+      encoding: 'buffer',
+    })
+    assert.equal(stderr.length, 0)
+    const { width, height } = readPngDimensions(stdout)
+    assert.ok(width > 0 && height > 0)
+    assert.equal(existsSync(join(dir, 'logo.png')), false)
+
+    // Combining --out - with --stdout is rejected
+    const conflict = await runCli(['--text', 'Conflict', '--out', '-', '--stdout'], dir)
+    assert.equal(conflict.exitCode, 1)
+    assert.match(conflict.stderr, /Cannot combine --out - with --stdout/)
   })
 
   it('supports bundled --fontsource and local --font-file without network access', async () => {

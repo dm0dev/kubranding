@@ -54,15 +54,26 @@ Prebuilt OCI images are published to GitHub Container Registry (see [Containerfi
 
 ```bash
 podman pull ghcr.io/dm0dev/kubranding:latest
-podman run --rm -v "$PWD/out:/out" ghcr.io/dm0dev/kubranding:latest \
+mkdir -p "$PWD/out" && podman run --rm \
+  --userns=keep-id --user "$(id -u):$(id -g)" \
+  -v "$PWD/out:/out:Z" ghcr.io/dm0dev/kubranding:latest \
   --text "Acme\nCloud" --color EE0000 --out /out/logo.png
 ```
+
+> **Note:** The image runs as a non-root user (`65532`). For rootless Podman, `--userns=keep-id --user "$(id -u):$(id -g)"` ensures the container can write to the mounted host directory and creates files owned by your user (for Docker, use `--user "$(id -u):$(id -g)"` without `--userns=keep-id`). You can also skip volume mounts altogether by writing raw PNG bytes to stdout with `--out -`:
+>
+> ```bash
+> podman run --rm ghcr.io/dm0dev/kubranding:latest \
+>   --text "Acme\nCloud" --color EE0000 --out - > logo.png
+> ```
 
 Or build the image locally from [Containerfile](Containerfile) (includes standard OCI `org.opencontainers.image.*` labels):
 
 ```bash
 podman build -f Containerfile -t kubranding .
-podman run --rm -v "$PWD/out:/out" kubranding --text "Acme\nCloud" --out /out/logo.png
+mkdir -p "$PWD/out" && podman run --rm \
+  --userns=keep-id --user "$(id -u):$(id -g)" \
+  -v "$PWD/out:/out:Z" kubranding --text "Acme\nCloud" --out /out/logo.png
 ```
 
 ### Node.js CLI

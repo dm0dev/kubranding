@@ -192,7 +192,9 @@ function formatCliText(text: string): string {
 }
 
 function resolveLocalPath(file: string, prefix: string): string {
-  return file.startsWith('/') || file.startsWith('./') ? file : `${prefix}${file}`
+  if (file.startsWith('/')) return file
+  if (file.startsWith('./')) return prefix === './' ? file : `${prefix}${file.slice(2)}`
+  return `${prefix}${file}`
 }
 
 /** Builds a `logo.json` payload compatible with `node src/cli/generate.ts --config`. */
@@ -267,10 +269,15 @@ export function buildCiCdCommand(options: CiCdCommandOptions): string {
 
   if (isPodman) {
     const needsWorkMount = (iconFile !== 'default' && iconFile !== 'none') || Boolean(fontFile)
-    const volumes = needsWorkMount ? '-v "$PWD/out:/out" -v "$PWD:/work:ro"' : '-v "$PWD/out:/out"'
-    return [
-      `podman run --rm ${volumes} ghcr.io/dm0dev/kubranding:latest \\\n  ${flags.join(' \\\n  ')}`,
-    ].join('\n')
+    const runLines = [
+      'mkdir -p "$PWD/out" && podman run --rm',
+      '  --userns=keep-id --user "$(id -u):$(id -g)"',
+      '  -v "$PWD/out:/out:Z"',
+      ...(needsWorkMount ? ['  -v "$PWD:/work:ro,z"'] : []),
+      '  ghcr.io/dm0dev/kubranding:latest',
+      ...flags.map((flag) => `  ${flag}`),
+    ]
+    return runLines.join(' \\\n')
   }
 
   return `node src/cli/generate.ts \\\n  ${flags.join(' \\\n  ')}`

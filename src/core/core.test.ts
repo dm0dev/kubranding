@@ -196,9 +196,20 @@ describe('manifests', () => {
       iconFile: 'default',
       target: 'podman',
     })
-    assert.match(podman, /podman run/)
-    assert.match(podman, /ghcr.io\/dm0dev\/kubranding:latest/)
+    assert.match(podman, /mkdir -p "\$PWD\/out" && podman run --rm/)
+    assert.match(podman, /--userns=keep-id --user "\$\(id -u\):\$\(id -g\)"/)
+    assert.match(podman, /-v "\$PWD\/out:\/out:Z"/)
+    assert.doesNotMatch(podman, /\/work/)
+    assert.match(podman, /ghcr\.io\/dm0dev\/kubranding:latest/)
     assert.match(podman, /--out "\/out\/your-fancy-kubernetes\.png"/)
+
+    const podmanWithAssets = buildCiCdCommand({
+      config: DEFAULT_CONFIG,
+      iconFile: './acme.svg',
+      target: 'podman',
+    })
+    assert.match(podmanWithAssets, /-v "\$PWD:\/work:ro,z"/)
+    assert.match(podmanWithAssets, /--icon "\/work\/acme\.svg"/)
 
     const jsonCmd = buildCiCdCommand({
       config: DEFAULT_CONFIG,

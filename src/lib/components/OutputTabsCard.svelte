@@ -724,7 +724,7 @@
 
       <textarea
         readonly
-        rows={cicdTarget === 'json' ? 5 : 10}
+        rows={cicdTarget === 'json' ? 5 : cicdTarget === 'podman' ? 12 : 10}
         value={cicdCommand}
         aria-label="CI/CD generator command"
         class="textarea font-mono text-[11px] leading-relaxed resize-y select-all whitespace-pre overflow-x-auto"

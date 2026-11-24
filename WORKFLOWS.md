@@ -94,11 +94,11 @@ Runs on `ubuntu-latest` with a 15-minute timeout:
    Builds [`Containerfile`](Containerfile) with `buildah bud --layers --format oci`, applying all resolved tags and OCI labels (extending/overriding the static `org.opencontainers.image.*` labels defined in `Containerfile` with dynamic build metadata such as `created`, `revision`, and `version`). The multi-stage image installs only runtime dependencies (`@napi-rs/canvas` and bundled fonts) on top of `quay.io/hummingbird/nodejs:24`.
 
 5. **Smoke test image with Podman** *(runs on PRs as well)*
-   Executes the built image against a temporary output directory:
+   Executes the built image against a temporary output directory using rootless user mapping (no `chmod 0777` workaround) plus `--read-only` mountless `--out -` and `--stdout` checks:
    ```bash
-   podman run --rm -v /tmp/smoke-out:/out:Z <primary_tag> --text "CI\nSmoke" --out /out/logo.png
+   podman run --rm --userns=keep-id --user "$(id -u):$(id -g)" -v /tmp/smoke-out:/out:Z <primary_tag> --text "CI\nSmoke" --out /out/logo.png
    ```
-   Verifies `/tmp/smoke-out/logo.png` exists and is non-empty (`test -s`).
+   Verifies `/tmp/smoke-out/logo.png` exists and is non-empty (`test -s`), and that `--out -` and `--stdout` work under `--read-only`.
 
 6. **Push tags to GHCR with Buildah** *(skipped on pull requests)*
    Pushes every resolved tag via `buildah push --digestfile ...` and captures the resulting immutable image digest (`sha256:...`).
