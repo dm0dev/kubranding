@@ -1,0 +1,177 @@
+name: Container & Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Containerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/core/**'
+      - 'src/node/**'
+      - 'src/cli/**'
+      - 'public/preset_logo.svg'
+      - '.github/workflows/release.yml'
+    tags:
+      - '[0-9]*.*.*'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Containerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/core/**'
+      - 'src/node/**'
+      - 'src/cli/**'
+      - 'public/preset_logo.svg'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Optional SemVer release tag to create and publish (e.g. 0.1.0)'
+        required: false
+        type: string
+
+concurrency:
+  group: container-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  container-and-release:
+    name: Build Container (Buildah) & Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' || inputs.tag != '' }}
+            type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
+
+      - name: Restore npm cache for container build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/buildah-npm-cache
+          key: ${{ runner.os }}-buildah-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-buildah-npm-
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | buildah login -u "${{ github.actor }}" --password-stdin "${{ env.REGISTRY }}"
+
+      - name: Build container image with Buildah
+        id: build
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          LABELS: ${{ steps.meta.outputs.labels }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/buildah-npm-cache
+          chmod -R 0777 /tmp/buildah-npm-cache || true
+
+          TAG_ARGS=()
+          while IFS= read -r tag; do
+            [[ -n "$tag" ]] && TAG_ARGS+=("-t" "$tag")
+          done <<< "$TAGS"
+
+          LABEL_ARGS=()
+          while IFS= read -r label; do
+            [[ -n "$label" ]] && LABEL_ARGS+=("--label" "$label")
+          done <<< "$LABELS"
+
+          PRIMARY_TAG=$(echo "$TAGS" | head -n1)
+
+          buildah bud \
+            --layers \
+            --format oci \
+            -v "/tmp/buildah-npm-cache:/tmp/npm-cache:rw" \
+            -f Containerfile \
+            "${TAG_ARGS[@]}" \
+            "${LABEL_ARGS[@]}" \
+            .
+
+          echo "primary_tag=$PRIMARY_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test image with Podman
+        run: |
+          mkdir -p /tmp/smoke-out
+          chmod 0777 /tmp/smoke-out
+          podman run --rm -v /tmp/smoke-out:/out:Z "${{ steps.build.outputs.primary_tag }}" \
+            --text "CI\nSmoke" --out /out/logo.png
+          test -s /tmp/smoke-out/logo.png
+
+      - name: Push tags to GHCR with Buildah
+        id: push
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          PRIMARY_TAG: ${{ steps.build.outputs.primary_tag }}
+        run: |
+          set -euo pipefail
+          DIGEST_FILE=$(mktemp)
+
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] && continue
+            echo "Pushing $tag..."
+            buildah push --digestfile "$DIGEST_FILE" "$PRIMARY_TAG" "docker://$tag"
+          done <<< "$TAGS"
+
+          DIGEST=$(cat "$DIGEST_FILE")
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag != '' && inputs.tag || github.ref_name }}
+          IMAGE_REPO: ${{ env.REGISTRY }}/${{ github.repository }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          IMAGE_LOWER=$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="${RELEASE_TAG#v}"
+          NOTES=$(cat <<EOF
+          ### Container Image (GHCR)
+
+          \`\`\`bash
+          podman pull ${IMAGE_LOWER}:${IMAGE_TAG}
+          # or by digest:
+          podman pull ${IMAGE_LOWER}@${DIGEST}
+          \`\`\`
+
+          #### Usage
+          \`\`\`bash
+          podman run --rm -v "\$PWD/out:/out" ${IMAGE_LOWER}:${IMAGE_TAG} --text "Acme\nCloud" --out /out/logo.png
+          \`\`\`
+          EOF
+          )
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --notes "$NOTES"
+          else
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
+              --generate-notes \
+              --notes "$NOTES"
+          fi

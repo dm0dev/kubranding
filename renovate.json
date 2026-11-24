@@ -1,0 +1,76 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":maintainLockFilesWeekly"
+  ],
+  "timezone": "UTC",
+  "schedule": [
+    "* 0-4 * * 1"
+  ],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+  "labels": [
+    "dependencies"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track container base images in Containerfile",
+      "fileMatch": [
+        "(^|/)Containerfile$"
+      ],
+      "matchStrings": [
+        "FROM\\s+(?<depName>[^:\\s]+):(?<currentValue>[^\\s@]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Disable GitHub Actions updates while running Renovate with GITHUB_TOKEN (lacks workflows permission)",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Group Containerfile base images",
+      "matchManagers": [
+        "dockerfile",
+        "custom.regex"
+      ],
+      "matchFileNames": [
+        "Containerfile"
+      ],
+      "groupName": "Container base images",
+      "pinDigests": true
+    },
+    {
+      "description": "Group Svelte & Vite ecosystem packages",
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "/^svelte/",
+        "/^@sveltejs\\//",
+        "/^@tsconfig\\/svelte$/",
+        "/^vite$/",
+        "/^@skeletonlabs\\//",
+        "/^@lucide\\/svelte$/"
+      ],
+      "groupName": "Svelte & UI toolchain"
+    },
+    {
+      "description": "Group Tailwind CSS packages",
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "tailwindcss",
+        "@tailwindcss/vite"
+      ],
+      "groupName": "Tailwind CSS"
+    }
+  ]
+}

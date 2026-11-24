@@ -1,0 +1,47 @@
+{
+  "name": "kubranding",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Kubernetes console logo compositor & branding manifest generator (web studio + headless Node.js CLI)",
+  "homepage": "https://dm0dev.github.io/kubranding/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dm0dev/kubranding.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dm0dev/kubranding/issues"
+  },
+  "author": "Daniel M. Gehrlein <dm0dev@proton.me>",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "logo": "node src/cli/generate.ts"
+  },
+  "devDependencies": {
+    "@lucide/svelte": "^1.78.0",
+    "@skeletonlabs/skeleton": "^5.0.6",
+    "@skeletonlabs/skeleton-svelte": "^5.0.6",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^24.19.2",
+    "svelte": "^5.57.3",
+    "svelte-check": "^4.7.7",
+    "tailwindcss": "^4.3.5",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@napi-rs/canvas": "^1.2.0"
+  }
+}

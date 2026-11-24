@@ -1,0 +1,83 @@
+name: Renovate
+
+on:
+  schedule:
+    # Weekly on Mondays at 03:00 UTC
+    - cron: '0 3 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'renovate.json'
+      - '.github/workflows/renovate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'renovate.json'
+      - '.github/workflows/renovate.yml'
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Override default Renovate log level'
+        required: false
+        default: 'info'
+        type: choice
+        options:
+          - info
+          - debug
+
+concurrency:
+  group: renovate-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Renovate Config
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Validate renovate.json
+        run: npx --yes --package renovate -c "renovate-config-validator --strict"
+
+  renovate:
+    name: Run Renovate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Renovate data
+        uses: actions/cache@v4
+        with:
+          path: /tmp/renovate/cache
+          key: renovate-cache-${{ github.run_id }}
+          restore-keys: |
+            renovate-cache-
+
+      - name: Self-hosted Renovate
+        uses: renovatebot/github-action@v43.0.4
+        env:
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_CACHE_DIR: /tmp/renovate/cache
+        with:
+          configurationFile: renovate.json
+          token: ${{ secrets.GITHUB_TOKEN }}
