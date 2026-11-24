@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import Footer from './lib/components/Footer.svelte'
   import Header from './lib/components/Header.svelte'
   import IconCard from './lib/components/IconCard.svelte'
   import OutputTabsCard from './lib/components/OutputTabsCard.svelte'
@@ -31,3 +32,5 @@
     <OutputTabsCard />
   </section>
 </main>
+
+<Footer />

@@ -122,7 +122,7 @@
         value="cicd"
         class="btn-sm text-xs whitespace-nowrap text-surface-600-400 data-[selected]:text-surface-950-50 data-[selected]:font-semibold"
       >
-        CI/CD
+        Create with CI/CD
       </Tabs.Trigger>
       <Tabs.Indicator class="bg-primary-500!" />
     </Tabs.List>
